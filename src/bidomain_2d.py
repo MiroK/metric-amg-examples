@@ -211,6 +211,7 @@ if __name__ == '__main__':
             if args.precond == "metric":
                 interface_dofs = np.arange(W[0].dim(), W[0].dim() + W[1].dim(), dtype=np.int32)
                 BB = get_precond(AA, W, bcs, interface_dofs)
+
             else:
                 BB = get_precond(AA, W, bcs)
             AAinv = ConjGrad(AA, precond=BB, tolerance=1E-8, show=4, maxiter=500, callback=cbk)

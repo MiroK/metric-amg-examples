@@ -146,7 +146,7 @@ if __name__ == '__main__':
     # Discretization
     parser.add_argument('-pdegree', type=int, default=1, help='Polynomial degree in Pk discretization')
     # Solver
-    parser.add_argument('-precond', type=str, default='diag', choices=('diag', 'hypre'))
+    parser.add_argument('-precond', type=str, default='diag', choices=('diag', 'hypre', 'metric'))
     
     parser.add_argument('-save', type=int, default=0, choices=(0, 1), help='Save graphics')    
 
@@ -177,6 +177,7 @@ if __name__ == '__main__':
     table_error = []
 
     get_precond = {'diag': utils.get_block_diag_precond,
+                   'metric': utils.get_hazmath_metric_precond,
                    'hypre': utils.get_hypre_monolithic_precond}[args.precond]
 
     mesh_generator = utils.SplitUnitSquareMeshes()
@@ -198,7 +199,9 @@ if __name__ == '__main__':
 
         then = time.time()
         # For simplicity only use block diagonal preconditioner
-        BB = get_precond(AA, W, bcs)
+        interface_dofs = np.fromiter(DirichletBC(W[0], Constant(0), bdries1, 1).get_boundary_values().keys(),
+                                     dtype='int32')
+        BB = get_precond(AA, W, bcs, interface_dofs=interface_dofs)
         
         AAinv = ConjGrad(AA, precond=BB, tolerance=1E-10, show=4, maxiter=500, callback=cbk)
         xx = AAinv * bb

@@ -6,13 +6,13 @@ import dolfin as df
 import numpy as np
 
 
-def get_block_diag_precond(A, W, bcs):
+def get_block_diag_precond(A, W, bcs, interface_dofs=None):
     '''Exact blocks LU as preconditioner'''
     n, = set(A.blocks.shape)
     return xii.block_diag_mat([LU(A[i, i]) for i in range(n)])
 
 
-def get_hypre_monolithic_precond(A, W, bcs):
+def get_hypre_monolithic_precond(A, W, bcs, interface_dofs=None):
     '''Invert block operator via hypre'''
 
     M = xii.ii_convert(A)
@@ -29,7 +29,7 @@ def get_hypre_monolithic_precond(A, W, bcs):
         'pc_hypre_boomeramg_P_max': 0,  # Max elements per row for interpolation operator (0=unlimited, (None,
         'pc_hypre_boomeramg_agg_nl': 0,  # Number of levels of aggressive coarsening (None,
         'pc_hypre_boomeramg_agg_num_paths': 1,  # Number of paths for aggressive coarsening (None,
-        'pc_hypre_boomeramg_strong_threshold': 0.25,  # Threshold for being strongly connected (None,
+        'pc_hypre_boomeramg_strong_threshold': 0.5,  # Threshold for being strongly connected (None,
         'pc_hypre_boomeramg_max_row_sum': 0.9,  # Maximum row sum (None,
         'pc_hypre_boomeramg_grid_sweeps_all': 1,  # Number of sweeps for the up and down grid levels (None,
         'pc_hypre_boomeramg_nodal_coarsen': 0,  # Use a nodal based coarsening 1-6 (HYPRE_BoomerAMGSetNodal,
@@ -61,7 +61,7 @@ def get_hypre_monolithic_precond(A, W, bcs):
     return R.T * Minv * R
 
 
-def get_hazmath_amg_precond(A, W, bcs):
+def get_hazmath_amg_precond(A, W, bcs, interface_dofs=None):
     '''Invert block operator via hypre'''
     import haznics
     from block.algebraic.hazmath import AMG as AMGhaz
@@ -126,7 +126,7 @@ def get_hazmath_metric_precond_mono(A, W, bcs, interface_dofs=None):
         "coarse_dof": 100,
         "coarse_solver": 32,  # (32 = SOLVER_UMFPACK, 0 = ITERATIVE)
         "coarse_scaling": haznics.ON,  # (OFF, ON)
-        "aggregation_type": haznics.HEC,  # (VMB, MIS, MWM, HEC)
+        "aggregation_type": haznics.HEM,  # (VMB, MIS, MWM, HEC)
         "strong_coupled": 0.1,  # threshold?
         "max_aggregation": 20,
         "amli_degree": 3,

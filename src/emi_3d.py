@@ -74,7 +74,7 @@ if __name__ == '__main__':
     # Discretization
     parser.add_argument('-pdegree', type=int, default=1, help='Polynomial degree in Pk discretization')
     # Solver
-    parser.add_argument('-precond', type=str, default='diag', choices=('diag', 'hypre'))
+    parser.add_argument('-precond', type=str, default='diag', choices=('diag', 'hypre', 'metric'))    
     
     parser.add_argument('-save', type=int, default=0, choices=(0, 1), help='Save graphics')    
 
@@ -105,6 +105,7 @@ if __name__ == '__main__':
     table_error = []
 
     get_precond = {'diag': utils.get_block_diag_precond,
+                   'metric': utils.get_hazmath_metric_precond,                   
                    'hypre': utils.get_hypre_monolithic_precond}[args.precond]
 
     mesh_generator = utils.SplitUnitCubeMeshes()
@@ -125,8 +126,13 @@ if __name__ == '__main__':
         cbk = lambda k, x, r, b=bb, A=AA: print(f'\titer{k} -> {[(b[i]-xi).norm("l2") for i, xi in enumerate(A*x)]}')
 
         then = time.time()
-        # For simplicity only use block diagonal preconditioner
-        BB = get_precond(AA, W, bcs)
+
+        W0_idofs = np.fromiter(DirichletBC(W[0], Constant(0), bdries1, 1).get_boundary_values().keys(),
+                                     dtype='int32')
+        W1_idofs = np.fromiter(DirichletBC(W[1], Constant(0), bdries2, 1).get_boundary_values().keys(),
+                                     dtype='int32')
+        interface_dofs = np.r_[W0_idofs, W[0].dim() + W1_idofs]
+        BB = get_precond(AA, W, bcs, interface_dofs=interface_dofs)
         
         AAinv = ConjGrad(AA, precond=BB, tolerance=1E-10, show=4, maxiter=500, callback=cbk)
         xx = AAinv * bb
@@ -144,23 +150,24 @@ if __name__ == '__main__':
         h = W[0].mesh().hmin()
         ndofs = sum(Wi.dim() for Wi in W)
 
-        eu1 = errornorm(u1_true, wh[0], 'H1', degree_rise=1)
-        eu2 = errornorm(u2_true, wh[1], 'H1', degree_rise=1)        
-        errors = np.array([eu1, eu2])
+        if ndofs < 100_000:
+            eu1 = errornorm(u1_true, wh[0], 'H1', degree_rise=1)
+            eu2 = errornorm(u2_true, wh[1], 'H1', degree_rise=1)        
+            errors = np.array([eu1, eu2])
 
-        if errors0 is None:
-            rates = [np.nan]*len(errors)
+            if errors0 is None:
+                rates = [np.nan]*len(errors)
 
-            # Base print
-            with open(get_path('iters', 'txt'), 'w') as out:
-                out.write('%s\n' % ' '.join(headers_ksp))
+                # Base print
+                with open(get_path('iters', 'txt'), 'w') as out:
+                    out.write('%s\n' % ' '.join(headers_ksp))
+
+                with open(get_path('error', 'txt'), 'w') as out:
+                    out.write('%s\n' % ' '.join(headers_error))
+            else:
+                rates = np.log(errors/errors0)/np.log(h/h0)
+            errors0, h0 = errors, h
             
-            with open(get_path('error', 'txt'), 'w') as out:
-                out.write('%s\n' % ' '.join(headers_error))
-        else:
-            rates = np.log(errors/errors0)/np.log(h/h0)
-        errors0, h0 = errors, h
-
         # ---
         ksp_row = (ndofs, niters, cond, ksp_dt, r_norm, h0) 
         table_ksp.append(ksp_row)

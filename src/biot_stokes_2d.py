@@ -170,7 +170,7 @@ if __name__ == '__main__':
     # Discretization
     parser.add_argument('-pdegree', type=int, default=1, help='Polynomial degree in Pk discretization')
     # Solver
-    parser.add_argument('-precond', type=str, default='diag', choices=('diag', 'hypre'))
+    parser.add_argument('-precond', type=str, default='diag', choices=('diag', 'hypre', 'metric'))
     
     parser.add_argument('-save', type=int, default=0, choices=(0, 1), help='Save graphics')    
 
@@ -201,6 +201,7 @@ if __name__ == '__main__':
     table_error = []
 
     get_precond = {'diag': utils.get_block_diag_precond,
+                   'metric': utils.get_hazmath_metric_precond,
                    'hypre': utils.get_hypre_monolithic_precond}[args.precond]
 
     mesh_generator = utils.SplitUnitSquareMeshes()
@@ -218,8 +219,12 @@ if __name__ == '__main__':
         AA, bb, W, bcs = get_system(bdries1, bdries2, interface_mesh, symgrad=bool(args.symgrad),
                                     data=test_case, pdegree=pdegree, parameters=params)
         # NOTE: For dedicated metric solver from Haznics
-        interface_dofs = [utils.get_interface_dofs(Wi, interface_mesh) for Wi in W]
-        assert all(len(d) for d in interface_dofs)
+        W0_idofs = np.fromiter(DirichletBC(W[0], Constant((0, 0)), bdries1, 1).get_boundary_values().keys(),
+                               dtype='int32')
+        W1_idofs = np.fromiter(DirichletBC(W[1], Constant((0, 0)), bdries2, 1).get_boundary_values().keys(),
+                               dtype='int32')
+        interface_dofs = np.r_[W0_idofs, W[0].dim() + W1_idofs]
+        BB = get_precond(AA, W, bcs, interface_dofs=interface_dofs)
         
         cbk = lambda k, x, r, b=bb, A=AA: print(f'\titer{k} -> {[(b[i]-xi).norm("l2") for i, xi in enumerate(A*x)]}')
 
